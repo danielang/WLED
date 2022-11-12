@@ -11,7 +11,9 @@
  */
 //#include "../usermods/EXAMPLE_v2/usermod_v2_example.h"
 
+#ifdef USERMOD_COUCH_INTEGRATION
 #include "../danielang/couch/CouchIntegration.h"
+#endif
 
 #ifdef USERMOD_BATTERY_STATUS_BASIC
 #include "../usermods/battery_status_basic/usermod_v2_battery_status_basic.h"
@@ -139,7 +141,9 @@ void registerUsermods()
    */
   //usermods.add(new MyExampleUsermod());
 
+  #ifdef USERMOD_COUCH_INTEGRATION
   usermods.add(new UsermodCouchIntegration());
+  #endif
 
   #ifdef USERMOD_BATTERY_STATUS_BASIC
   usermods.add(new UsermodBatteryBasic());
