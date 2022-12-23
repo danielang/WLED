@@ -2,7 +2,6 @@
 
 #include "wled.h"
 #include <Wire.h>
-#include <MCP23017.h>
 
 #ifndef WLED_ENABLE_MQTT
     #error "This user mod requires MQTT to be enabled."
@@ -10,84 +9,33 @@
 
 #define USERMOD_ID_COUCH_INTEGRATION 1095
 
-#define I2C_SDA 19
-#define I2C_SCL 18
+#define PIN_BUTTON_LEFT 27
+#define PIN_BUTTON_RIGHT 25
 
-#define MCP23017_ADDRESS 0x27
-#define MCP23017_INTERRUPT_PIN 23
+#define PIN_RELAY_1 32
+#define PIN_RELAY_2 4
 
 #define FOREWARD 1
 #define BACKWARD -1
 
-#define BUTTON_LEFT 1
-#define BUTTON_RIGHT 2
-
-#define STEPPER_OFF 255
-#define STEPPER_FOREWARD 64  // prev 0
-#define STEPPER_BACKWARD 128
-
-volatile bool mcp23017Interrupted = false;
-
-void IRAM_ATTR mcp23017InterruptHandler() {
-  mcp23017Interrupted = true;
-}
-
 class UsermodCouchIntegration : public Usermod {
   private:
-    MCP23017 mcp = MCP23017(MCP23017_ADDRESS, Wire);
-
-    unsigned long buttonLastCheck = 0;
-    byte buttonInputState;
     unsigned long buttonLeftPressed = 0;
     unsigned long buttonRightPressed = 0;
 
     void checkButtons(unsigned long timestamp) {
-      if (!mcp23017Interrupted) {
-        mcp.clearInterrupts();
-        return;
+      bool buttonLeft = !digitalRead(PIN_BUTTON_LEFT);
+      bool buttonRight = !digitalRead(PIN_BUTTON_RIGHT);
+
+      if (buttonLeft && !buttonLeftPressed) {
+        buttonLeftPressed = timestamp;
+      } else if (!buttonLeft && buttonLeftPressed) {
+        buttonLeftPressed = 0;
       }
 
-      delay(100);
-      mcp23017Interrupted = false;
-
-      Serial.println("INTERRUPT");
-
-      uint8_t captureA;
-      mcp.clearInterrupts(captureA, buttonInputState);
-
-      // flip bits
-      buttonInputState = ~buttonInputState;
-
-      Serial.println(buttonInputState, BIN);
-
-      // if (timestamp - buttonLastCheck < 250) {
-      //   return; 
-      // }
-
-      // buttonLastCheck = timestamp;
-
-      // // Address A: 0x12
-      // // Address B: 0x13
-      // Wire.beginTransmission(0x27);
-      // Wire.write(0x13);
-      // Wire.endTransmission();
-
-      // // request one byte of data from MCP20317
-      // Wire.requestFrom(0x27, 1);
-
-      // buttonInputState = Wire.read();
-
-      if (buttonInputState == BUTTON_LEFT + BUTTON_RIGHT && !(buttonLeftPressed && buttonRightPressed)) {
-        buttonLeftPressed = timestamp;
+      if (buttonRight && !buttonRightPressed) {
         buttonRightPressed = timestamp;
-      } else if (buttonInputState == BUTTON_LEFT && !buttonLeftPressed) {
-        buttonLeftPressed = timestamp;
-        buttonRightPressed = 0;
-      } else if (buttonInputState == BUTTON_RIGHT && !buttonRightPressed) {
-        buttonLeftPressed = 0;
-        buttonRightPressed = timestamp;
-      } else if (!buttonInputState || buttonInputState > BUTTON_LEFT + BUTTON_RIGHT) {
-        buttonLeftPressed = 0;
+      } else if (!buttonRight && buttonRightPressed) {
         buttonRightPressed = 0;
       }
     }
@@ -133,33 +81,30 @@ class UsermodCouchIntegration : public Usermod {
     
   public:
     void setup() {
-      Wire.setClock(10000);
-      Wire.begin(I2C_SDA, I2C_SCL);
 
-      mcp.init();
-      mcp.portMode(MCP23017Port::A, 0);
-      mcp.portMode(MCP23017Port::B, 0b11111111);
+      pinMode(PIN_BUTTON_LEFT, INPUT);
+      pinMode(PIN_BUTTON_RIGHT, INPUT);
 
-      mcp.interruptMode(MCP23017InterruptMode::Separated);
-      mcp.interrupt(MCP23017Port::B, CHANGE);
-
-      mcp.writeRegister(MCP23017Register::IPOL_A, 0xFF);
-      mcp.writeRegister(MCP23017Register::IPOL_B, 0xFF);
-
-      mcp.writeRegister(MCP23017Register::GPIO_A, 0x00);
-      mcp.writeRegister(MCP23017Register::GPIO_B, 0x00);
-
-      mcp.clearInterrupts();
-
-      pinMode(MCP23017_INTERRUPT_PIN, INPUT_PULLUP);
-      attachInterrupt(MCP23017_INTERRUPT_PIN, mcp23017InterruptHandler, FALLING);
+      pinMode(PIN_RELAY_1, OUTPUT);
+      pinMode(PIN_RELAY_2, OUTPUT);
 
       // self test
-      mcp.writePort(MCP23017Port::A, 0b10111111);
+      digitalWrite(PIN_RELAY_1, HIGH);
+      digitalWrite(PIN_RELAY_2, HIGH);
+
       delay(750);
-      mcp.writePort(MCP23017Port::A, 0b01111111);
+
+      digitalWrite(PIN_RELAY_1, LOW);
+
       delay(750);
-      mcp.writePort(MCP23017Port::A, 0b11111111);
+
+      digitalWrite(PIN_RELAY_1, HIGH);
+      digitalWrite(PIN_RELAY_2, LOW);
+
+      delay(750);
+
+      digitalWrite(PIN_RELAY_1, HIGH);
+      digitalWrite(PIN_RELAY_2, HIGH);
     }
 
     void loop() {
@@ -176,17 +121,11 @@ class UsermodCouchIntegration : public Usermod {
           moveStartTimestamp = timestamp;
 
           if (direction == FOREWARD) {
-            mcp.writePort(MCP23017Port::A, STEPPER_FOREWARD);
-            // Wire.beginTransmission(0x27);
-            // Wire.write(0x12); // address port A
-            // Wire.write(STEPPER_FOREWARD);
-            // Wire.endTransmission();
+            digitalWrite(PIN_RELAY_1, LOW);
+            digitalWrite(PIN_RELAY_2, HIGH);
           } else if (direction == BACKWARD) {
-            mcp.writePort(MCP23017Port::A, STEPPER_BACKWARD);
-            // Wire.beginTransmission(0x27);
-            // Wire.write(0x12); // address port A
-            // Wire.write(STEPPER_BACKWARD);
-            // Wire.endTransmission();
+            digitalWrite(PIN_RELAY_1, HIGH);
+            digitalWrite(PIN_RELAY_2, LOW);
           }
         }
 
@@ -201,9 +140,6 @@ class UsermodCouchIntegration : public Usermod {
             publishMqttPosition(position);
           }
         }
-
-        Serial.print("Position: ");
-        Serial.println(position);
       } else if (positionTarget != position) {
         int difference = positionTarget - position;
         direction = difference / abs(difference);
@@ -214,19 +150,11 @@ class UsermodCouchIntegration : public Usermod {
           moveStartTimestamp = timestamp;
 
           if (direction == FOREWARD) {
-            mcp.writePort(MCP23017Port::A, STEPPER_FOREWARD);
-
-            // Wire.beginTransmission(0x27);
-            // Wire.write(0x12); // address port A
-            // Wire.write(STEPPER_FOREWARD);
-            // Wire.endTransmission();
+            digitalWrite(PIN_RELAY_1, LOW);
+            digitalWrite(PIN_RELAY_2, HIGH);
           } else if (direction == BACKWARD) {
-            mcp.writePort(MCP23017Port::A, STEPPER_BACKWARD);
-            
-            // Wire.beginTransmission(0x27);
-            // Wire.write(0x12); // address port A
-            // Wire.write(STEPPER_BACKWARD);
-            // Wire.endTransmission();
+            digitalWrite(PIN_RELAY_1, HIGH);
+            digitalWrite(PIN_RELAY_2, LOW);
           }
         }
 
@@ -243,12 +171,8 @@ class UsermodCouchIntegration : public Usermod {
         moveLastTickTimestamp = 0;
 
         // stop motor
-        mcp.writePort(MCP23017Port::A, STEPPER_OFF);
-
-        // Wire.beginTransmission(0x27);
-        // Wire.write(0x12); // address port A
-        // Wire.write(STEPPER_OFF);
-        // Wire.endTransmission();
+        digitalWrite(PIN_RELAY_1, HIGH);
+        digitalWrite(PIN_RELAY_2, HIGH);
       }
 
     }
