@@ -89,22 +89,22 @@ class UsermodCouchIntegration : public Usermod {
       pinMode(PIN_RELAY_2, OUTPUT);
 
       // self test
-      digitalWrite(PIN_RELAY_1, HIGH);
-      digitalWrite(PIN_RELAY_2, HIGH);
+      // digitalWrite(PIN_RELAY_1, HIGH);
+      // digitalWrite(PIN_RELAY_2, HIGH);
 
-      delay(750);
+      // delay(750);
 
-      digitalWrite(PIN_RELAY_1, LOW);
+      // digitalWrite(PIN_RELAY_1, LOW);
 
-      delay(750);
+      // delay(750);
 
-      digitalWrite(PIN_RELAY_1, HIGH);
-      digitalWrite(PIN_RELAY_2, LOW);
+      // digitalWrite(PIN_RELAY_1, HIGH);
+      // digitalWrite(PIN_RELAY_2, LOW);
 
-      delay(750);
+      // delay(750);
 
-      digitalWrite(PIN_RELAY_1, HIGH);
-      digitalWrite(PIN_RELAY_2, HIGH);
+      // digitalWrite(PIN_RELAY_1, HIGH);
+      // digitalWrite(PIN_RELAY_2, HIGH);
     }
 
     void loop() {
